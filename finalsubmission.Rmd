@@ -1,0 +1,530 @@
+---
+title: "Trump's Election Effect on Anti-Minority Hate Crimes"
+author: "Rena Zhong"
+date: "November 24, 2020"
+output: 
+  pdf_document:
+    fig_caption: yes
+header-includes:
+   - \usepackage{subfig}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r pkgtest, echo=FALSE, results="hide", include=FALSE}
+pkgTest <- function(x)
+{
+  if (!require(x,character.only = TRUE))
+  {
+    install.packages(x,repos = "http://cran.r-project.org", dep=TRUE)
+    if(!require(x,character.only = TRUE)) stop("Package not found")
+  }
+}
+```
+
+```{r packages, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+pkgTest("tidyverse")
+pkgTest("knitr")
+pkgTest("readr")
+pkgTest("tidyr")
+pkgTest("sjmisc")
+pkgTest("magrittr")
+pkgTest("readr")
+pkgTest("dplyr")
+pkgTest("purrr")
+pkgTest("broom")
+pkgTest("ggplot2")
+pkgTest("xtable")
+pkgTest("MASS")
+pkgTest("foreign")
+pkgTest("kableExtra")
+pkgTest("gtsummary")
+pkgTest("caret") 
+pkgTest("multisensi")
+pkgTest("httk")
+pkgTest("pksensi")
+pkgTest("sensitivity")
+pkgTest("ROCR")
+pkgTest("gridExtra")
+```
+
+```{r libraries, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(readr)
+library(tidyr)
+library(sjmisc)
+library(magrittr)
+library(readr)
+library(dplyr)
+library(purrr)
+library(broom)
+library(ggplot2)
+library(xtable)
+library(MASS)
+library(foreign)
+library(kableExtra)
+library(gtsummary)
+library(caret) 
+library(multisensi)
+library(httk)
+library(pksensi)
+library(sensitivity)
+library(ROCR)
+library(gridExtra)
+```
+
+```{r load-data, echo=FALSE, message=FALSE, warning=FALSE}
+hate_crime <- read_csv("hate_crime.csv")
+```
+
+# I. Introduction
+
+The 2020 presidential election has been decided, and Donald Trump's four year term in the office has come to an end. From 2016, when President Trump took office, there has been an increase in the number of hate crimes in the United States annually by as much as 17% in 2017 (BBC News 2018). Though many hate crimes may not be fatal or result in death, the increase in number of hate crimes is a growing issue and needs to be addressed, to protect the safety of American citizens. By analyzing past data on hate crimes, I hope to understand the trends and patterns in the number of hate crimes following Trump's election in 2016. More specifically, I aim to see if Trump's election to presidency in 2016 has an effect on the number of hate crimes against minority groups in the United States.
+
+According to the FBI (Federal Bureau of Investigation), a hate crime is defined as "a criminal offense against a person or property motivated in whole or in part by an offender’s bias against a race, religion, disability, sexual orientation, ethnicity, gender, or gender identity." The motivation of a hate crime is subjective, so there must be sufficient evidence to lead to the conclusion that an agency should report an incident as a hate crime, which can be viewed very differently depending on the context of the incident's environment (Hate Crimes 2016).
+
+There has been a number of papers published on Trump's election's effect on hate crimes through various methods. One paper published in 2018 utilizes time series analyses to model hate crime trends after Trump's election in 2016 through measuring the effect of various events (such as 9/11, terrorism, homicide, etc.) on hate crimes, varying by the quarter and year and found that Trump's election coincided with a surge in hate crimes (Edwards and Rushin 2018). Another paper on hate crimes against immigrants and Hispanic-Americans uses ordinary least squares, Poisson regression, and negative binomial regression models to look for hate crime trends (Shively et al. 2013). In this paper, I will be using regression models similar to that used in the latter paper to build off and find specificaly the effect on anti-minority hate crimes as opposed to hate crimes in general like mentioned in other literature.
+
+In section II, I will describe in more detail the dataset used as well as how the data was cleaned before moving further. Section III is on exploratory data analysis and briefly introduces the variables of that I will be working with. Section IV outlines the different models used and how I came to the final model before evaluating the model in Section V through cross-validation. Section VI describes how I evaluated the model, which includes sensitivity analysis and model validation. Finally, Section VII wraps up the paper with a discussion and conclusion of this paper.
+
+# II. Data
+
+The dataset for this paper comes from the FBI Uniform Crime Reporting (UCR)'s Hate Crime Statistics Program which collects data from city, county, college and university, state, tribal, and federal law enforcement agencies who voluntarily submit crime data with information on time and date of incident, number of victims and offenders, perceived race or ethnicity of perpetrator(s) and victim(s), offense, location, and bias motivation. Agencies submit hate crime data electronically monthly or quarterly through the state UCR program or directly to the Hate Crime Statistics Program using one of the following three methods: National Incident-Based Reporting System (NIBRS), hate crime record layout, or Microsoft Excel Workbook Tool. There has been a few changes over the past few years including the addition of 7 new religious anti-bias categories (anti-Buddhist, anti-Eastern Orthodox, anti-Hindu, anti-Jehovah’s Witness, anti-Mormon, anti-Other Christian, and anti-Sikh) as well as an anti-Arab bias motivation in 2015.
+
+The dataset I am working with is a combined dataset of hate crime data from 1991 to until 2018.  Earlier data beginning in 1985 is available but not digitally uploaded. As of September 28, 2020, the 2019 hate crime data has been released on the FBI's website, with the delay because of the need to clean and sort the data before publishing it. The dataset contains 201,403 observations and 28 variables, where every row represents a recorded hate crime and columns are characteristics of the incident such as: incident id, year, region. A full list of the dataset variables can be found in the appendix.
+
+Because the data was in the format where every observation is a hate crime incident, additional data cleaning is needed. Although the data begins in 1991, I decided to use only the years from 2014 to 2018 since these years were right around the year of his election in 2016. Additionally, I wanted to include data from the year before his campaign announcement on June 16th, 2015 (Staff). 
+
+Of the 28 variables, there were a number of variables with missing data as well as irrelevant or repeated information. A list of removed variables can be found in the appendix. The goal is to look for the effect on anti-minority hate crimes, so it was necessary to separate hate crimes into anti-majority and anti-minority hate crimes that reflect the demographics of the United States, which is done by creating a new variable, crime category, that indicates if the crime an anti-majority or anti-minority hate crime. Bias descriptions that fit the 'majority' of the US population including white, Catholic, Protestant, heterosexual, male, eastern Orthodox, were categorized as anti-majority hate crimes, while the rest were categorized as anti-minority. In deciding which groups counted as the majority, I included Protestant and Catholic since those two religions were the most common religion (Pew Research Center 2019). Additionally, incidents where the offender race was black were not counted, since this was the largest count of 'minority' offenders and in this paper, I am looking specifically at hate crimes where the offender race is characteristic of the majority. Section VII will go into further detail regarding this decision. Additionally, non-US incidents were removed, and a month variable was created to indicate which month over the 5-year span the incident happened in. Finally, the data is grouped by month, crime category, and region name, with the final variable being the number of crime counts.
+
+```{r cleaning, echo=FALSE, message=FALSE, warning=FALSE}
+years_2014_5_6_7_8 <- subset(hate_crime, DATA_YEAR >= 2014 & DATA_YEAR <=2018)
+
+years_2014_5_6_7_8 <- years_2014_5_6_7_8[, -c(3,4,5,6,14,15,16,17,18,20,21,23)]
+
+years_2014_5_6_7_8 <- years_2014_5_6_7_8 %>%
+  mutate(Month = substr(INCIDENT_DATE, 4,6)) 
+
+black_offender <- subset(hate_crime, OFFENDER_RACE == "Black or African American")
+white_offender <- subset(hate_crime, OFFENDER_RACE == "White")
+
+crime_categories <- unique(years_2014_5_6_7_8$BIAS_DESC)
+
+Anti_Majority <- c("Anti-White", "Anti-Catholic", "Anti-Protestant","Anti-Heterosexual",
+                   "Anti-Male", "Anti-Eastern Orthodox (Russian, Greek, Other)",
+                   "Anti-Physical Disability;Anti-White","Anti-Male", 
+                   "Anti-Male;Anti-White", "Anti-Catholic;Anti-Protestant")
+# other possible biases to consider 
+# "Anti-Atheism/Agnosticism", "Anti-Mormon", "Anti-Other Christian"
+# "Anti-Other Religion;Anti-White", Unknown (offender's motivation not known)
+
+years_14_5_6_7_8 <- years_2014_5_6_7_8 %>% 
+  mutate(Crime_Cat = case_when(
+    BIAS_DESC %in% Anti_Majority ~ "Anti_Maj",
+    !(BIAS_DESC %in% Anti_Majority) & OFFENDER_RACE != "Black or African American" ~ "Anti_Min"
+  ))
+
+years_14_5_6_7_8 <- years_14_5_6_7_8[!(is.na(years_14_5_6_7_8$Crime_Cat)),]
+
+crimes_60months <- years_14_5_6_7_8 %>% mutate(Months = case_when(
+  Month == "JAN"  ~ 1 + (DATA_YEAR-2014)*12,
+  Month == "FEB"  ~ 2 + (DATA_YEAR-2014)*12,
+  Month == "MAR"  ~ 3 + (DATA_YEAR-2014)*12,
+  Month == "APR"  ~ 4 + (DATA_YEAR-2014)*12,
+  Month == "MAY"  ~ 5 + (DATA_YEAR-2014)*12,
+  Month == "JUN"  ~ 6 + (DATA_YEAR-2014)*12,
+  Month == "JUL"  ~ 7 + (DATA_YEAR-2014)*12,
+  Month == "AUG"  ~ 8 + (DATA_YEAR-2014)*12,
+  Month == "SEP"  ~ 9 + (DATA_YEAR-2014)*12,
+  Month == "OCT"  ~ 10+ (DATA_YEAR-2014)*12,
+  Month == "NOV"  ~ 11+ (DATA_YEAR-2014)*12,
+  Month == "DEC"  ~ 12+ (DATA_YEAR-2014)*12,
+))
+
+crimes_60months <- crimes_60months[crimes_60months$REGION_NAME != "U.S. Territories",]
+crimes_60months <- crimes_60months[crimes_60months$REGION_NAME !="Other",]
+
+crimes_Months <- crimes_60months %>%
+  group_by(Months, Crime_Cat)%>%
+  summarise(Crime_Counts =n())
+```
+
+```{r t-test, echo=FALSE, message=FALSE, warning=FALSE}
+crimes_Months_prior <- subset(crimes_Months, Months < 35)
+crimes_Months_after <- subset(crimes_Months, Months >= 35)
+
+crimes_Months_after_min <- subset(crimes_Months_after, Crime_Cat=="Anti_Min")
+crimes_Months_prior_min <- subset(crimes_Months_prior, Crime_Cat=="Anti_Min")
+
+ttmin <- t.test(crimes_Months_prior_min$Crime_Counts,crimes_Months_after_min$Crime_Counts)
+
+crimes_Months_after_maj <- subset(crimes_Months_after, Crime_Cat=="Anti_Maj")
+crimes_Months_prior_maj <- subset(crimes_Months_prior, Crime_Cat=="Anti_Maj")
+
+ttmaj <- t.test(crimes_Months_prior_maj$Crime_Counts,crimes_Months_after_maj$Crime_Counts )
+
+before <- with(crimes_Months_prior, tapply(Crime_Counts, Crime_Cat, function(x) {
+  sprintf("Mean (Var) = %1.1f (%1.1f)", mean(x), var(x))}))
+
+after <- with(crimes_Months_after, tapply(Crime_Counts, Crime_Cat, function(x) {
+  sprintf("Mean (Var) = %1.1f (%1.1f)", mean(x), var(x))}))
+
+#ttest <- map_df(list(ttmin, ttmaj), tidy)
+#ttest[c('estimate1', 'estimate2', 'p.value')]
+
+crimes_60months <- crimes_60months %>%
+  mutate(Crime_Counts = 1)
+
+crimes0 <- crimes_60months %>% 
+  complete(Months, Crime_Cat, REGION_NAME, fill = list(Crime_Counts = 0)) %>% 
+  group_by(Months,Crime_Cat, REGION_NAME,) %>% 
+  summarise(Crime_Counts = sum(Crime_Counts))
+
+#with(crimes_Months, tapply(Crime_Counts, Crime_Cat, function(x) {
+#   sprintf("Mean (Var) = %1.1f (%1.1f)", mean(x), var(x))
+#}))
+#with(crimes0, tapply(Crime_Counts, Crime_Cat, function(x) {
+#  sprintf("Mean (Var) = %1.1f (%1.1f)", mean(x), var(x))
+#}))
+```
+
+# III. Exploratory Data Analysis
+
+In this section, I take an introductory look at variables of interest that will be included in the model. The variables of interest include the outcome variable, which is the count of hate crimes and the region where the hate crime occured. 
+Figure 1 shows hate crimes from 2014 to 2018 and the number of hate crimes broken down by the crime category over the same time period. Already from figure 1, we can notice a slight increase in the number of hate crimes since Trump's election in 2016 as well as a spike in the number of hate crimes in the month of his election. Figure 2 shows the distribution of the number of hate crimes per month by crime category and the boxplots of the crime count per month. The west has the highest average number of hate crimes compared to the northeast, which has the lowest.
+
+```{r eda1, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 4, fig.cap="Crime Category", }
+eda1 <- ggplot(data = crimes_Months) +
+  geom_bar(mapping = aes(x = Months, y = Crime_Counts, fill = Crime_Cat), stat = "identity") +
+  geom_vline(xintercept = 35, color = "red", size = 0.5) +
+  geom_text(aes(x=35, label = "Election", y= 200), color ="black", angle = 0, vjust = 1) +
+  labs(title = "Hate Crimes 2014 - 2018", y = "Crime Count", x = "Month", fill = "Crime Category")
+
+eda2 <- ggplot(data = crimes_Months) +
+  geom_bar(mapping = aes(x = Months, y = Crime_Counts, fill = Crime_Cat), stat = "identity") +
+  geom_vline(xintercept = 35, color = "red", size = 0.5) +
+  facet_grid(Crime_Cat ~ ., margins = TRUE, scales = "fixed") +
+  labs(title = "Breakdown of Hate Crimes 2014-2018", y = "Crime Count", x = "Month", fill = "Crime Category")
+
+grid.arrange(eda1, eda2)
+```
+
+```{r eda2, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 4, fig.cap="Hate Crimes per Month"}
+eda2 <- ggplot(crimes_Months, aes(Crime_Counts, fill = Crime_Cat)) + 
+  geom_histogram(binwidth = 5) +
+  labs(title = "Hate Crimes per Month", subtitle = "By Crime Category",
+       x = "Crime Count", y = "Count of Monthly Crime Occurences", fill = "Crime Category") +
+  theme(legend.position = "none") +
+  facet_grid(Crime_Cat ~ ., margins = TRUE, scales = "fixed")
+
+eda3 <- ggplot(crimes0, aes(x = REGION_NAME, y = Crime_Counts)) + 
+  geom_boxplot() +
+  labs(title = "Hate Crimes per Month", subtitle = "By Region",
+       y = "Monthly Crime Count", x = "Region")
+
+grid.arrange(eda3, eda2, ncol = 2)
+```
+
+\pagebreak
+# IV. Model
+
+```{r models, echo=FALSE, message=FALSE, warning=FALSE}
+# one - 1 month
+crimes1 <- crimes0 %>%
+  mutate(election = case_when(
+    Months  != 35 ~ 0,
+    Months  ==  35 ~ 1
+  ))
+
+nbfit1 <- glm.nb(Crime_Counts ~ Crime_Cat + REGION_NAME + Months + election +
+         Crime_Cat * election, data = crimes1) 
+#summary(nbfit1)
+coef_int <- cbind(Estimate = coef(nbfit1), confint(nbfit1))
+#exp(coef_int)
+exp_coef_int <- exp(coef_int)
+rownames(exp_coef_int) <- c("Intercept", "Anti-Minority", "Northeast", "South", "West", "Months",
+                        "Election", "Anti-Minority:Crimes")
+ecoefint <- xtable(exp_coef_int)
+
+# two - 3 months
+crimes2 <- crimes0 %>% 
+  mutate(election = case_when(
+    Months <  35 | Months >   37 ~ 0,
+    Months >= 35 & Months <=  37 ~ 1
+  ))
+
+nbfit2 <- glm.nb(Crime_Counts ~ Crime_Cat + Months + REGION_NAME + election +
+                   Crime_Cat * election, data = crimes2) 
+
+#summary(nbfit2)
+coef_int2 <- cbind(Estimate = coef(nbfit2), confint(nbfit2))
+#exp(coef_int2)
+
+# three - 6 months
+crimes3 <- crimes0 %>% 
+  mutate(election = case_when(
+    Months <  35 | Months > 40 ~ 0,
+    Months >= 35 & Months <= 40 ~ 1
+  ))
+
+nbfit3 <- glm.nb(Crime_Counts ~ Crime_Cat + Months + REGION_NAME + election +
+                   Crime_Cat * election, data = crimes3) 
+
+#summary(nbfit3)
+coef_int3 <- cbind(Estimate = coef(nbfit3), confint(nbfit3))
+#exp(coef_int3)
+
+# four - 12 months
+crimes4 <- crimes0 %>% 
+  mutate(election = case_when(
+    Months <  35 | Months > 46 ~ 0,
+    Months >= 35 & Months <= 46 ~ 1
+  ))
+
+nbfit4 <- glm.nb(Crime_Counts ~ Crime_Cat + Months + REGION_NAME + election +
+                   Crime_Cat * election, data = crimes4) 
+
+#summary(nbfit4)
+coef_int4 <- cbind(Estimate = coef(nbfit4), confint(nbfit4))
+#exp(coef_int4)
+#logLik(nbfit4)
+
+# other models
+qpoissonfit <- glm(Crime_Counts ~ Crime_Cat + REGION_NAME + election + Months +
+                     Crime_Cat * election, family = quasipoisson, data = crimes1)
+poissonfit <- glm(Crime_Counts ~ Crime_Cat + REGION_NAME + election + Months +
+                    Crime_Cat * election, family = poisson, data = crimes1)
+linearfit <- lm(Crime_Counts ~ Crime_Cat + REGION_NAME + election + Months +
+                  Crime_Cat * election, data = crimes1)
+
+#summary(nbfit1)$r.squared 
+lrsqdf <- data.frame("r.squared" = summary(linearfit)$r.squared)
+lrsq <- xtable(lrsqdf)
+
+pchi <- pchisq(2 * (logLik(nbfit1) - logLik(poissonfit)), df = 1, lower.tail = FALSE)
+
+pcs <- xtable(data.frame("chi-squared" = c("1.024872e-162"),
+                         "df" = c("9")))
+
+#tables
+
+kable(pcs, caption = "NB vs. Poisson", escape = TRUE) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+kable(ecoefint, caption = "Model Estimates (exp)") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+kable(lrsq, caption = "Linear R-squared")%>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+#crimes_24th$predicted <- predict(nbfit4, crimes_0, type = "response")
+```
+
+In coming up with the model, I took a similar approach to the earlier referenced literature, where they applied three models: Ordinary Least Squares models, Poisson Regression models, and Negative Binomial Regression models (Shively et al. 2013). However, to make sure that a negative binomial model was the appropriate fit, I also fit a linear, Poisson, and quasi-Poisson model to compare how effective they were compared to the negative binomial model. In selecting and testing models, a Poisson model would not be appropriate since the mean and variance of the crime count were not close to each other, which is necessary for the Poisson model. I ran a chi-squared test between the negative binomial and Poisson model and found that the negative binomial model is much better than the Poisson model as shown in Table 1. The linear model proved to not be a good fit because the r-squared value is 0.2145. Additionally, negative binomial regression models count, which fits with the response variable, the number of hate crimes (UCLA). Once I had decided on my model, I also looked at three other cases of election: the rest of the year, the half year, and the whole year after Trump's election, and found that the case where only the election month was included was most effective.
+
+\begin{center}
+$Y \sim NB(mean, overdispersion)$
+\end{center}
+
+The goal is to compare if there is an increase in the number of anti-minority hate crimes after Trump's election in 2016, so I decided to use the difference-in-differences model, which works through estimating the effect of a specific event (in this case, Trump's election) and comparing changes in outcomes between two groups (anti-majority and anti-minority hate crimes), giving us a difference in differences between the two groups before and after Trump's election (Columbia Public Health).
+
+The variables included in the model are crime category, election, region name, months, and an interaction term between election and the crime category, which is the variable of interest. The election variable will have a value of 1 for the months of interest, which will be only the month of November 2016, the month that Trump was elected for president, and for other months, election is 0. The baselines for the variables `crime category` and `region` are anti-majority and mid-west, respectively. The variable of interest will be the interaction term since the difference-in-differences will show the effect of Trump's election on hate crimes against minorities. The negative binomial model is shown on the next page.
+
+\begin{center}
+$log(mean) = \beta_0 + \beta_{1,1}*I(CrimeCategory_{i} = Anti-minority) + \beta_{2,1}*I(election_{i}=1) + \beta_{3,1}*I(region_{i} = NE) + \beta_{3,2}*I(region_{i} = South) + \beta_{3,3}*I(region_{i} = South) + \beta_4*I(Months_{i} = 1...60) + \beta_5*CrimeCategory_{i}*Election_{i}$
+\end{center}
+
+Table 2 shows the exponentiated estimates of the model for negative binomial regression model. The reason the exponentiated coefficients are shown is because of the log link function for the negative binomial model. For reference, the models for the linear, Poisson, and quasi-Poisson models created to compare to the negative binomial model are shown.
+
+\begin{center}
+$Y_i = \beta_0 + \beta_{1}*CrimeCategory_i + \beta_{2}*election_i + \beta_{3}*region_i + \beta_4*Months_i + \beta_5*CrimeCategory_i*Election_i$
+\end{center}
+
+\begin{center}
+$Y~ \sim Poisson(mean)$
+\end{center}
+
+\begin{center}
+$ln(Y_i) = \beta_0 + \beta_{1}*CrimeCategory_i + \beta_{2}*election_i + \beta_{3}*region_i + \beta_4*Months_i + \beta_5*CrimeCategory_i*Election_i$
+\end{center}
+
+# V. Results
+
+```{r tt-results, echo=FALSE, message=FALSE, warning=FALSE}
+table1 <- xtable(data.frame("Crime Category" = c("Anti-minority", "Anti-majority"),
+                            "Pre-election" = c("364.11765", "66.05882"), 
+                           "Post-election" = c("462.84615", "77.11538"), 
+                           "p-value" = c("8.840152e-09", "4.772565e-03")))
+kable(table1, caption = "Pre/Post Election T-test", escape = TRUE) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+In comparing a preliminary results experiment, I ran two separate t-test on anti-minority and anti-majority hate crimes. For each crime category (anti-minority vs. anti-majority), the t-test compared the number of hate crimes before the election to number of hate crimes after the election. It is evident that there is a larger increase in the number of hate crimes before and after the election for anti-minorities compared to anti-majorities, which is shown in Table 3. 
+
+To reiterate, the variable that will help us understand if Trump's election increased the number of hate crimes against minorities is the interaction term between the crime category and the election variables. As shown in Table 2 from section IV, the estimate of the interaction term is approximately 1.1873, which can be interpreted as a multiplicative increase in hate crimes against minorities versus majorities during the month of Trump's election compared to other months, with a confidence interval between 0.7627 and 1.8537. For other variables of interest, we can see that being the Northeast or South region has a point estimate of 0.9131 and 0.9886 respectively. Because these values are less than one, Trump's election, holding all other variables constant, do not have a noticeable effect on the number of hate crimes against minorities. For the variables with a point estimate over one, we can say those have a multiplicative increase on number of hate crimes, for example in the West region by 1.1839.
+
+What can be concluded is that the positive coefficient for the difference-in-differences model, suggesting that the election (which was the dummy variable) had a larger impact on anti-minority hate crimes. In other words, Trump’s election in 2016 increased the amount of hate crimes against minorities more than majorities. However the p-value not being significant (with the exception of the fourth case) means that impact of the election may not have been as significant as the media portrays.
+
+
+# VI. Model Evaluation
+## 1. Sensitivity Analysis
+
+For sensitivity analysis, first a partition of the data is created with 90% of the data. For my model, I used variance-based sensitivity analysis, also known as the Sobol method. Essentially, this decomposes the variance of the output of the model into fractions. In other words, we can tell how much of the variance of the output variable (hate crime count) is caused by the variance from each variable. From the plot below, it is evident that the variance of variable crime category causes the most amount of variance in hate crimes followed by the region.
+
+Because of the difference-in-differences model, I want to see what fraction of the output variance is because of the interaction term between crime category and election. The percentages can be directly interpreted as sensitivity measures. From the plot, it is evident that the variable Crime Category has a larger fraction on the output variance. 
+
+```{r sens-analysis, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 4, fig.cap="Sobol Indices"}
+
+random_rows <- createDataPartition(crimes1$Crime_Counts, p = 0.9, list = FALSE) 
+X1 <- crimes1[-random_rows,]
+
+random_rows <- createDataPartition(crimes1$Crime_Counts, p = 0.9, list = FALSE) 
+X2 <- crimes1[-random_rows,]
+
+x <- sobol(model = nbfit1, X1, X2, order = 2, nboot = 0, conf = 0.95)
+x1 <- sobol(model = nbfit1, X1, X2, order = 1, nboot = 0, conf = 0.95)
+
+#print(x)
+#summary(x)
+sobol <- ggplot(x, ylim = c( -2,2)) +
+  labs(title = "Sobol Sensitivity Indices", x = "Parameters")
+
+grid.arrange(sobol)
+```
+
+
+## 2. Model Validation
+
+In this section, I discuss the ways I validate my model; I use cross-validation, k-fold cross validation (where k=10), as well as leave-one-out cross validation. Looking at the cross-validation RMSE, the closer it is to zero, the better. The value for the CV does relatively well, and the RMSE in the k-fold CV and LOOCV are also close to zero, which shows that the model does a pretty good job. The process for my model validation consisted of training the dataset with the various methods mentioned and then comparing the coefficients and the error estimates for the cross-validation method.Thee two models that are being compared are represented through the test (negative binomial) and the train (linear) datasets.
+
+```{r cv-model-validation, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="CV"}
+# cv
+set.seed(111)
+
+random_rows <- createDataPartition(crimes1$Crime_Counts, p = 0.9, list = FALSE) 
+
+crimes1_training <- crimes1[random_rows,]
+crimes1_testing <- crimes1[-random_rows,]
+
+X1 <- crimes1[-random_rows,]
+X2 <- crimes1[-random_rows,]
+
+nbfit1_training <- glm.nb(Crime_Counts ~ Crime_Cat + REGION_NAME + Months + election +
+                            Crime_Cat * election, data = crimes1_training)
+
+crimes1_predictions <- predict(nbfit1_training, crimes1_testing, type = "response")
+
+#a <- predict(nbfit1_training, crimes1_testing, type = "response")
+#validation <- data.frame(a, Crime_Counts = crimes1_testing$Crime_Counts)
+#b <- prediction(validation$a, validation$Crime_Counts)
+#crimes1_testing$Crime_Counts
+
+crimes1_combined <- crimes1_testing %>%
+  relocate("election")
+
+crimes1_combined <- cbind(crimes1_combined, Predicted = crimes1_predictions)
+
+kable(xtable(summary(nbfit1_training)), caption = "CV Estimates") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+kable(data.frame(RSquared = R2(crimes1_predictions, crimes1_testing$Crime_Counts),
+           RMSE = RMSE(crimes1_predictions, crimes1_testing$Crime_Counts),
+           MAE = MAE(crimes1_predictions, crimes1_testing$Crime_Counts)), 
+      caption = "CV Error Estimates", escape = TRUE) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+#a <- extract(crimes1_predictions, Test)
+```
+
+
+```{r kfold-model-validation, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="K-fold"}
+# kfold
+set.seed(222)
+
+train_control <- trainControl(method = "cv", number = 10) 
+
+nbfit1_kfold <- train(Crime_Counts ~ Crime_Cat + REGION_NAME + Months + election +
+                        Crime_Cat * election, data = crimes1, method = "glm.nb", trControl = train_control) 
+
+kable(xtable(summary(nbfit1_kfold)), caption = "K-fold Estimates", escape = TRUE) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+kable(nbfit1_kfold$results, caption = "K-fold Error Estimates", escape = TRUE) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+
+```{r loocv-model-validation, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="LOOCV"}
+# loocv
+set.seed(333)
+
+t_control <- trainControl(method = "LOOCV") 
+
+nbfit1_loocv <- train(Crime_Counts ~ Crime_Cat + REGION_NAME + Months + election +
+                        Crime_Cat * election , data = crimes1, method = "glm.nb", trControl = t_control) 
+
+kable(xtable(summary(nbfit1_loocv)), caption = "LOOCV Estimates", escape = TRUE) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+kable(nbfit1_loocv$results, caption = "LOOCV Error Estimates", escape = TRUE) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+\pagebreak
+# VII. Limitations and Discussion
+
+In working with hate crime data, there are many factors to consider, including reporting hate crimes, same-group hate crimes, and fake hate crimes that could have limited the accuracy and legitimacy of the data and project. Though the FBI website defines what a hate crime is, it is important to realize that there are many cases of hate crimes that are not reported. For example, one example was in San Francisco's Chinatown, where an Asian tourist was threatened by a black man, but a report was not filed because the tourist had already left the scene (Graff 2020). In other situations, some may not want to report what happened because of the hassle, meaning there could be a number of hate crimes that are not in the dataset. For same-group crimes, like the controversial black-on-black crimes. There were incidents of black on black crime (as well as other groups), but something to consider is if it possible for a crime to be considered a hate crime if it is within the same group. Finally, in considering fake hate crimes, the case of Jussie Smollett is an example of how a fake hate crime could be easily staged with an ulterior motive. Smollett had paid two bodybuilders to attack and shout anti-gay slurs at him then lied to the investigators because he was unhappy with his salary (Webber 2020). There has been a number of fake hate crimes that is being recorded on the fakehatecrimes database, which is problematic because this could render the data unreliable if fake hate crimes are not removed. It would have been interesting to explore the trends of hate crimes based on location density, for example, if hate crimes are more common in urban or rural areas. However, because the population of the incident was not reported, it was not possible to analyze this. Additionally, many variables were repetitive, so the information contained in the dataset was not as expansive. Another limitation was that I only looked at effects in the month of the election, so the results would not be as applicable for long-run effects. After working with this dataset, I was curious to look into more details on the hate crimes themselves. In the future, it would be interesting to explore if there was an increase of hate crimes towards individuals, businesses, or society, and what kinds of hate crimes are more common. By hate crime against business or society I mean if the hate crime was robbing a business that is owned by a minority or a writing a racial slur in a public space respectively. Is physical assault more common, or is there an increase in the number of robberies against minority businesses? 
+
+\newpage
+# VIII. Citations
+
+“Difference-in-Difference Estimation.” Search the Website, www.publichealth.columbia.edu/research/population-health-methods/difference-difference-estimation. 
+
+Edwards, Griffin Sims and Rushin, Stephen, The Effect of President Trump's Election on Hate Crimes (January 14, 2018). Available at SSRN: https://ssrn.com/abstract=3102652 or http://dx.doi.org/10.2139/ssrn.3102652
+
+“FBI: Spike in US Hate Crimes for Third Year in a Row.” BBC News, BBC, 13 Nov. 2018, www.bbc.com/news/world-us-canada-46189391. 
+
+Graff, Amy. “Video Shows Chinatown Business Owner Flashing Concealed Weapon to Protect Tourist.” SFGATE, San Francisco Chronicle, 19 Oct. 2020, www.sfgate.com/bayarea/article/Chinatown-assault-Golden-Gate-Cookie-Factory-15658543.php. 
+
+Hanes, Emma, and Stephen Machin. “Hate Crime in the Wake of Terror Attacks: Evidence From 7/7 and 9/11.” Journal of Contemporary Criminal Justice, vol. 30, no. 3, Aug. 2014, pp. 247–267, doi:10.1177/1043986214536665.
+
+"Hate Crime Reported by Victims and Police" 
+from https://www.bjs.gov/content/pub/pdf/hcrvp.pdf (accessed October 19, 2020).
+
+“Hate Crimes.” FBI, FBI, 3 May 2016, www.fbi.gov/investigate/civil-rights/hate-crimes. 
+
+Pew Research Center, Oct. 17, 2019, “In U.S.,
+Decline of Christianity Continues at Rapid Pace”
+
+Shively, Michael, et al. Abt Associates, 2013, pp. 19–25, Understanding Trends in Hate Crimes Against Immigrants and Hispanic-Americans. 
+
+Staff, TIME. “Donald Trump's Presidential Announcement Speech.” Time, Time, 16 June 2015, time.com/3923128/donald-trump-announcement-speech/. 
+
+UCLA: Negative Binomial Regression | R Data Analysis Examples
+from https://stats.idre.ucla.edu/r/dae/negative-binomial-regression/ (accessed October 19, 2020).
+
+Webber, Tammy. “Jussie Smollett's Image Takes New Hit with Revived Charges.” AP NEWS, Associated Press, 12 Feb. 2020, apnews.com/article/707c892045e5025da16b2a01d6b96d27. 
+
+# IX. Appendix
+\pagebreak
+
+```{r rem-var, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Removed Variables"}
+# list of removed variables from hate crimes
+rv <- data.frame(names(hate_crime[, c(3,4,5,6,14,15,16,17,18,20,21,23)]))
+kable(xtable(rv), caption = "removed variables")%>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r anti-maj, echo=FALSE, warning=FALSE, message=FALSE, fig.cap="Anti-Majority"}
+Anti_Majority <- c("Anti-White", "Anti-Catholic", "Anti-Protestant","Anti-Heterosexual",
+                   "Anti-Male", "Anti-Eastern Orthodox (Russian, Greek, Other)",
+                   "Anti-Physical Disability;Anti-White","Anti-Male", 
+                   "Anti-Male;Anti-White", "Anti-Catholic;Anti-Protestant")
+kable(Anti_Majority, caption = "Anti-majority")%>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
